@@ -177,7 +177,7 @@ if st.session_state.current_data is not None:
     st.markdown("### 💾 資料庫管理")
     # === 💡 新增：一鍵下載按鈕 ===
     # 將目前的表格轉換成 CSV 格式，並加上 utf-8-sig 確保 Excel 打開中文不會亂碼
-    csv_data = df_show.to_csv(index=False, encoding='utf-8-sig')
+    csv_data = df_show.to_csv_data = df_show.to_csv(index=False).encode('utf-8-sig')
     st.download_button(
         label="⬇️ 一鍵下載今日數據 (CSV/Excel)",
         data=csv_data,
@@ -222,4 +222,5 @@ if st.session_state.current_data is not None:
                 if '融資餘額(張)' in df_st_hist.columns: chart_cols.append('融資餘額(張)')
 
                 st.bar_chart(df_st_hist[chart_cols])
+
 
