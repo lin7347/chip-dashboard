@@ -77,7 +77,7 @@ def fetch_full_market_data(date_str, target_stocks):
                 df_margin.columns = ['代號', '融資餘額(張)']
                 df_margin['融資餘額(張)'] = df_margin['融資餘額(張)'].astype(str).str.replace(',', '', regex=False).astype(int)
     except:
-        pass # 若抓不到散戶資料，不影響主程式運行
+        pass 
 
     # --- 完美縫合 ---
     if not df_price.empty:
@@ -96,7 +96,7 @@ def fetch_full_market_data(date_str, target_stocks):
 
 # ================= 網頁介面與邏輯 =================
 st.set_page_config(page_title="專屬籌碼戰情室", layout="wide")
-st.title("🎯 專屬籌碼分析戰情室 (含散戶反向雷達)")
+st.title("🎯 專屬籌碼分析戰情室 (收納升級版)")
 
 if 'current_data' not in st.session_state:
     st.session_state.current_data, st.session_state.current_date = None, None
@@ -124,12 +124,12 @@ if st.sidebar.button("🔍 執行籌碼掃描"):
             st.session_state.current_data = df
             st.session_state.current_date = selected_date
 
+# --- 顯示資料區 ---
 if st.session_state.current_data is not None:
     df_show = st.session_state.current_data.copy()
     current_d = st.session_state.current_date
     st.success(f"✅ 成功獲取 {current_d} 數據！")
     
-    # 計算連續天數
     if os.path.exists(history_file):
         hist_df = pd.read_csv(history_file)
         hist_df = hist_df[hist_df['日期'].astype(str) != str(current_d)] 
@@ -162,15 +162,14 @@ if st.session_state.current_data is not None:
     else:
         df_show['法人動向'] = df_show['投信動向'] = "📝 需存檔"
 
-   # 重新排列欄位，確保重要資訊在前面
+    # 重新排列欄位
     cols = ['代號', '名稱', '收盤價', '投信動向', '法人動向', '法人買超佔比(%)', '融資餘額(張)', '總成交量(張)', '外資買超(張)', '投信買超(張)', '三大法人合計(張)']
     df_show = df_show[[c for c in cols if c in df_show.columns]]
 
-    # --- 第一區：核心戰略看板 (永遠顯示) ---
+    # --- 第一區：核心看板 ---
     col1, col2 = st.columns([1.5, 1])
     with col1:
         st.markdown("### 📋 綜合數據總表")
-        # 💡 秘訣 1：加入 hide_index=True 隱藏最左邊的無用數字序號
         st.dataframe(df_show, hide_index=True, use_container_width=True)
     with col2:
         st.markdown("### 📊 法人買超比較")
@@ -179,8 +178,7 @@ if st.session_state.current_data is not None:
 
     st.markdown("---")
 
-    # --- 第二區：資料庫管理抽屜 (點擊展開) ---
-    # 💡 秘訣 2：使用 st.expander 製作收納盒
+    # --- 第二區：資料庫管理抽屜 ---
     with st.expander("💾 資料庫管理與下載 (點擊展開)"):
         st.markdown("在這裡您可以將今日數據下載備份，或存入歷史資料庫。")
         col_btn1, col_btn2 = st.columns(2)
@@ -210,7 +208,7 @@ if st.session_state.current_data is not None:
                     updated_df.to_csv(history_file, index=False, encoding='utf-8-sig')
                     st.success(f"✅ {current_d} 數據已成功更新至資料庫！")
 
-    # --- 第三區：歷史趨勢分析抽屜 (點擊展開) ---
+    # --- 第三區：歷史趨勢分析抽屜 ---
     with st.expander("📈 歷史籌碼與股價趨勢分析 (點擊展開)"):
         if os.path.exists(history_file):
             df_hist = pd.read_csv(history_file)
