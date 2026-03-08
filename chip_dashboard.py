@@ -175,6 +175,18 @@ if st.session_state.current_data is not None:
         st.bar_chart(chart_data)
 
     st.markdown("### 💾 資料庫管理")
+    # === 💡 新增：一鍵下載按鈕 ===
+    # 將目前的表格轉換成 CSV 格式，並加上 utf-8-sig 確保 Excel 打開中文不會亂碼
+    csv_data = df_show.to_csv(index=False, encoding='utf-8-sig')
+    st.download_button(
+        label="⬇️ 一鍵下載今日數據 (CSV/Excel)",
+        data=csv_data,
+        file_name=f"籌碼戰況_{current_d}.csv",
+        mime="text/csv"
+    )
+    # ==============================
+
+    if st.button("📥 將本日數據存入歷史資料庫"):
     if st.button("📥 將本日數據存入歷史資料庫"):
         df_to_save = df_show.copy()
         # 清除圖表用的動向文字，保持資料庫純淨
@@ -209,4 +221,5 @@ if st.session_state.current_data is not None:
                 st.markdown(f"**{sel_stock} - 三大法人與散戶(融資)**")
                 chart_cols = ['三大法人合計(張)']
                 if '融資餘額(張)' in df_st_hist.columns: chart_cols.append('融資餘額(張)')
+
                 st.bar_chart(df_st_hist[chart_cols])
