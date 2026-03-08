@@ -6,6 +6,7 @@ import time
 import json
 import gspread
 from google.oauth2.service_account import Credentials
+from datetime import datetime
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -14,22 +15,16 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def init_connection():
     try:
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        
-        # === 💡 終極防護：不管保險箱怎麼包，程式自動修復 ===
         raw_secret = st.secrets["google_credentials"]
         
         if isinstance(raw_secret, str):
             try:
-                # 絕招 1：允許字串內包含隱藏控制符號 (strict=False)
                 creds_dict = json.loads(raw_secret, strict=False)
             except:
-                # 絕招 2：如果還是不行，強行把真實換行轉成 JSON 看得懂的格式
                 clean_secret = raw_secret.replace('\n', '\\n').replace('\r', '')
                 creds_dict = json.loads(clean_secret, strict=False)
         else:
-            # 絕招 3：如果 Streamlit 已經聰明地把它當作字典了
             creds_dict = dict(raw_secret)
-        # ==================================================
 
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
@@ -59,7 +54,7 @@ def fetch_full_market_data(date_str, target_stocks):
             df_chips[col] = df_chips[col].astype(int)
     except: return None
 
-    # --- 引擎 B：抓價量 ---
+    # --- 引擎 B：抓價量與「5日均量判定」 ---
     roc_year = int(date_str[:4]) - 1911
     roc_date_str = f"{roc_year}/{date_str[4:6]}/{date_str[6:8]}"
     price_list = []
@@ -69,12 +64,32 @@ def fetch_full_market_data(date_str, target_stocks):
             res = requests.get(url_price, headers=headers, verify=False, timeout=5)
             data = res.json()
             if data.get('stat') == 'OK':
-                for row in data['data']:
+                records = data['data']
+                target_idx = -1
+                for i, row in enumerate(records):
                     if row[0] == roc_date_str:
-                        vol_int = int(int(row[1].replace(',', '')) / 1000)
-                        close_price = float(row[6].replace(',', ''))
-                        price_list.append({'代號': stock, '收盤價': close_price, '總成交量(張)': vol_int})
+                        target_idx = i
                         break
+                
+                if target_idx != -1:
+                    vol_int = int(int(records[target_idx][1].replace(',', '')) / 1000)
+                    close_price = float(records[target_idx][6].replace(',', ''))
+                    
+                    # 計算均量 (最多回溯當月前4個交易日，加上當日共5日)
+                    start_idx = max(0, target_idx - 4)
+                    vol_sum = 0
+                    count = 0
+                    for j in range(start_idx, target_idx + 1):
+                        vol_sum += int(int(records[j][1].replace(',', '')) / 1000)
+                        count += 1
+                    avg_vol = round(vol_sum / count) if count > 0 else 0
+                    
+                    # 判斷量能狀態
+                    if vol_int > avg_vol * 1.2: vol_status = "🔥 爆量"
+                    elif vol_int < avg_vol * 0.8: vol_status = "💧 量縮"
+                    else: vol_status = "⚪ 量平"
+
+                    price_list.append({'代號': stock, '收盤價': close_price, '總成交量(張)': vol_int, '5日均量(張)': avg_vol, '量能變化': vol_status})
         except: pass
         time.sleep(1) 
     df_price = pd.DataFrame(price_list)
@@ -120,7 +135,7 @@ def fetch_full_market_data(date_str, target_stocks):
 
 # ================= 網頁介面與邏輯 =================
 st.set_page_config(page_title="專屬籌碼戰情室", layout="wide")
-st.title("🎯 專屬籌碼分析戰情室 (Google 雲端大腦版)")
+st.title("🎯 專屬籌碼分析戰情室 (量能擴充版)")
 
 if 'current_data' not in st.session_state:
     st.session_state.current_data, st.session_state.current_date = None, None
@@ -142,7 +157,6 @@ my_stocks = [s.strip() for s in stock_input.split(',') if s.strip()]
 selected_date = st.sidebar.date_input("選擇交易日").strftime("%Y%m%d")
 
 if st.sidebar.button("🔍 執行籌碼掃描"):
-    # 將新清單寫回 Google 試算表
     if sheet:
         try:
             ws_list = sheet.worksheet("觀察清單")
@@ -173,7 +187,6 @@ if st.session_state.current_data is not None:
     current_d = st.session_state.current_date
     st.success(f"✅ 成功獲取 {current_d} 數據！")
     
-    # 計算連續天數 (使用 Google 雲端歷史數據)
     if not df_hist.empty:
         hist_df_filtered = df_hist[df_hist['日期'] != str(current_d)] 
         temp_curr = df_show.copy()
@@ -207,10 +220,11 @@ if st.session_state.current_data is not None:
     else:
         df_show['法人動向'] = df_show['投信動向'] = "📝 需存檔"
 
-    cols = ['代號', '名稱', '收盤價', '投信動向', '法人動向', '法人買超佔比(%)', '融資餘額(張)', '總成交量(張)', '外資買超(張)', '投信買超(張)', '三大法人合計(張)']
+    # 加入量能變化的欄位排序
+    cols = ['代號', '名稱', '收盤價', '投信動向', '法人動向', '量能變化', '總成交量(張)', '5日均量(張)', '法人買超佔比(%)', '融資餘額(張)', '外資買超(張)', '投信買超(張)', '三大法人合計(張)']
     df_show = df_show[[c for c in cols if c in df_show.columns]]
 
-    # --- 第一區：核心看板 (上下排列) ---
+    # --- 第一區：核心看板 ---
     st.markdown("### 📋 綜合數據總表")
     st.dataframe(df_show, hide_index=True, use_container_width=True)
     st.markdown("---")
@@ -221,7 +235,6 @@ if st.session_state.current_data is not None:
 
     # --- 第二區：資料庫管理抽屜 ---
     with st.expander("💾 資料庫管理與下載 (點擊展開)"):
-        st.markdown("將數據**同步備份至 Google 試算表**，或下載至本機電腦。")
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
             csv_data = df_show.to_csv(index=False).encode('utf-8-sig')
@@ -231,7 +244,7 @@ if st.session_state.current_data is not None:
             if st.button("📥 寫入 Google 雲端歷史資料庫"):
                 if sheet:
                     df_to_save = df_show.copy()
-                    if '法人動向' in df_to_save.columns: df_to_save = df_to_save.drop(columns=['法人動向', '投信動向'])
+                    if '法人動向' in df_to_save.columns: df_to_save = df_to_save.drop(columns=['法人動向', '投信動向', '量能變化'])
                     df_to_save.insert(0, '日期', current_d)
                     
                     try:
@@ -242,17 +255,14 @@ if st.session_state.current_data is not None:
                         else:
                             updated_df = df_to_save
                         
-                        # 全部轉成文字，避免 Google 試算表無法辨識數字格式
                         updated_df = updated_df.astype(str)
                         ws_hist.clear()
                         ws_hist.update('A1', [updated_df.columns.values.tolist()] + updated_df.values.tolist())
-                        st.success(f"✅ {current_d} 數據已成功寫入您的 Google 試算表！打開手機 App 就能看到囉！")
+                        st.success(f"✅ {current_d} 數據已成功寫入您的 Google 試算表！")
                     except Exception as e:
                         st.error(f"❌ 寫入失敗：{e}")
-                else:
-                    st.error("雲端未連線，無法存檔。")
 
-    # --- 第三區：歷史趨勢分析抽屜 ---
+    # --- 第三區：歷史趨勢分析 ---
     with st.expander("📈 歷史籌碼與股價趨勢分析 (點擊展開)"):
         if not df_hist.empty:
             df_hist_display = df_hist.copy()
@@ -263,7 +273,6 @@ if st.session_state.current_data is not None:
                 sel_stock = st.selectbox("請選擇要分析的股票：", avail_stocks)
                 df_st_hist = df_hist_display[df_hist_display['名稱'] == sel_stock].set_index('日期')
                 
-                # 將字串轉回數字以便畫圖
                 for col in ['收盤價', '三大法人合計(張)', '融資餘額(張)']:
                     if col in df_st_hist.columns:
                         df_st_hist[col] = pd.to_numeric(df_st_hist[col], errors='coerce').fillna(0)
@@ -278,7 +287,31 @@ if st.session_state.current_data is not None:
                     if '融資餘額(張)' in df_st_hist.columns: chart_cols.append('融資餘額(張)')
                     st.bar_chart(df_st_hist[chart_cols])
         else:
-            st.info("📝 Google 試算表中尚未有歷史紀錄，請先執行上方掃描並存檔。")
+            st.info("📝 尚未有歷史紀錄，請先執行上方掃描並存檔。")
 
+    # --- 第四區：區間籌碼累計加總 (全新功能！) ---
+    with st.expander("📅 區間籌碼累計加總 (點擊展開)"):
+        if not df_hist.empty:
+            st.markdown("計算所選日期區間內，觀察清單股票的三大法人累計買賣超張數。")
+            df_hist_dates = pd.to_datetime(df_hist['日期'], format='%Y%m%d', errors='coerce').dropna()
+            
+            if not df_hist_dates.empty:
+                min_date, max_date = df_hist_dates.min().date(), df_hist_dates.max().date()
+                date_range = st.date_input("選擇歷史分析區間", [min_date, max_date], min_value=min_date, max_value=max_date)
+                
+                if len(date_range) == 2:
+                    start_str, end_str = date_range[0].strftime("%Y%m%d"), date_range[1].strftime("%Y%m%d")
+                    mask = (df_hist['日期'] >= start_str) & (df_hist['日期'] <= end_str)
+                    df_period = df_hist.loc[mask].copy()
 
-
+                    if not df_period.empty:
+                        for col in ['外資買超(張)', '投信買超(張)', '三大法人合計(張)']:
+                            if col in df_period.columns:
+                                df_period[col] = pd.to_numeric(df_period[col], errors='coerce').fillna(0)
+                        
+                        df_agg = df_period.groupby(['代號', '名稱'])[['外資買超(張)', '投信買超(張)', '三大法人合計(張)']].sum().reset_index()
+                        st.dataframe(df_agg, hide_index=True, use_container_width=True)
+                    else:
+                        st.info("該區間內沒有歷史數據，請確認您的 Google 試算表中是否有此區間的存檔。")
+        else:
+            st.info("📝 您的 Google 試算表目前是空的，只要每天按一次存檔，這裡就會自動幫您計算區間總和喔！")
