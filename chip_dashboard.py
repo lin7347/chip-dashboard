@@ -166,15 +166,16 @@ if st.session_state.current_data is not None:
     cols = ['代號', '名稱', '收盤價', '投信動向', '法人動向', '法人買超佔比(%)', '融資餘額(張)', '總成交量(張)', '外資買超(張)', '投信買超(張)', '三大法人合計(張)']
     df_show = df_show[[c for c in cols if c in df_show.columns]]
 
-    # --- 第一區：核心看板 ---
-    col1, col2 = st.columns([1.5, 1])
-    with col1:
-        st.markdown("### 📋 綜合數據總表")
-        st.dataframe(df_show, hide_index=True, use_container_width=True)
-    with col2:
-        st.markdown("### 📊 法人買超比較")
-        chart_data = df_show.set_index('名稱')[['外資買超(張)', '投信買超(張)']]
-        st.bar_chart(chart_data)
+    # --- 第一區：核心看板 (上下排列) ---
+    st.markdown("### 📋 綜合數據總表")
+    st.dataframe(df_show, hide_index=True, use_container_width=True)
+
+    st.markdown("---") # 加一條分隔線讓畫面更俐落
+
+    st.markdown("### 📊 法人買超比較")
+    chart_data = df_show.set_index('名稱')[['外資買超(張)', '投信買超(張)']]
+    # 加大圖表的高度，讓柱狀圖看起來更清楚
+    st.bar_chart(chart_data, height=400)
 
     st.markdown("---")
 
@@ -229,3 +230,4 @@ if st.session_state.current_data is not None:
                     st.bar_chart(df_st_hist[chart_cols])
         else:
             st.info("📝 尚未建立歷史資料庫，請先將數據存檔。")
+
