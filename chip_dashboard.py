@@ -14,7 +14,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def init_connection():
     try:
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds_dict = json.loads(st.secrets["google_credentials"])
+        creds_dict = dict(st.secrets["google_credentials"])
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
         return client.open("專屬籌碼資料庫")
@@ -263,3 +263,4 @@ if st.session_state.current_data is not None:
                     st.bar_chart(df_st_hist[chart_cols])
         else:
             st.info("📝 Google 試算表中尚未有歷史紀錄，請先執行上方掃描並存檔。")
+
