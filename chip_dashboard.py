@@ -14,12 +14,28 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def init_connection():
     try:
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        creds_dict = json.loads(st.secrets["google_credentials"])
+        
+        # === 💡 終極防護：不管保險箱怎麼包，程式自動修復 ===
+        raw_secret = st.secrets["google_credentials"]
+        
+        if isinstance(raw_secret, str):
+            try:
+                # 絕招 1：允許字串內包含隱藏控制符號 (strict=False)
+                creds_dict = json.loads(raw_secret, strict=False)
+            except:
+                # 絕招 2：如果還是不行，強行把真實換行轉成 JSON 看得懂的格式
+                clean_secret = raw_secret.replace('\n', '\\n').replace('\r', '')
+                creds_dict = json.loads(clean_secret, strict=False)
+        else:
+            # 絕招 3：如果 Streamlit 已經聰明地把它當作字典了
+            creds_dict = dict(raw_secret)
+        # ==================================================
+
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         client = gspread.authorize(creds)
         return client.open("專屬籌碼資料庫")
     except Exception as e:
-        st.error(f"❌ 無法連線至 Google 試算表，請檢查金鑰或共用設定：{e}")
+        st.error(f"❌ 無法連線至 Google 試算表：{e}")
         return None
 
 sheet = init_connection()
@@ -263,5 +279,6 @@ if st.session_state.current_data is not None:
                     st.bar_chart(df_st_hist[chart_cols])
         else:
             st.info("📝 Google 試算表中尚未有歷史紀錄，請先執行上方掃描並存檔。")
+
 
 
