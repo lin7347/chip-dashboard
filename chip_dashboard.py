@@ -162,66 +162,72 @@ if st.session_state.current_data is not None:
     else:
         df_show['法人動向'] = df_show['投信動向'] = "📝 需存檔"
 
+   # 重新排列欄位，確保重要資訊在前面
     cols = ['代號', '名稱', '收盤價', '投信動向', '法人動向', '法人買超佔比(%)', '融資餘額(張)', '總成交量(張)', '外資買超(張)', '投信買超(張)', '三大法人合計(張)']
     df_show = df_show[[c for c in cols if c in df_show.columns]]
 
+    # --- 第一區：核心戰略看板 (永遠顯示) ---
     col1, col2 = st.columns([1.5, 1])
     with col1:
         st.markdown("### 📋 綜合數據總表")
-        st.dataframe(df_show, use_container_width=True)
+        # 💡 秘訣 1：加入 hide_index=True 隱藏最左邊的無用數字序號
+        st.dataframe(df_show, hide_index=True, use_container_width=True)
     with col2:
         st.markdown("### 📊 法人買超比較")
         chart_data = df_show.set_index('名稱')[['外資買超(張)', '投信買超(張)']]
         st.bar_chart(chart_data)
 
-    st.markdown("### 💾 資料庫管理")
-    # === 💡 新增：一鍵下載按鈕 ===
-    # 將目前的表格轉換成 CSV 格式，並加上 utf-8-sig 確保 Excel 打開中文不會亂碼
-    csv_data = df_show.to_csv(index=False).encode('utf-8-sig')
-    st.download_button(
-        label="⬇️ 一鍵下載今日數據 (CSV/Excel)",
-        data=csv_data,
-        file_name=f"籌碼戰況_{current_d}.csv",
-        mime="text/csv"
-    )
-    # ==============================
-
-    if st.button("📥 將本日數據存入歷史資料庫"):
-        df_to_save = df_show.copy()
-        # 清除圖表用的動向文字，保持資料庫純淨
-        if '法人動向' in df_to_save.columns: df_to_save = df_to_save.drop(columns=['法人動向', '投信動向'])
-        df_to_save.insert(0, '日期', current_d) 
-        if not os.path.exists(history_file):
-            df_to_save.to_csv(history_file, index=False, encoding='utf-8-sig')
-            st.success("🎉 歷史資料庫建立成功！")
-        else:
-            history_df = pd.read_csv(history_file)
-            if str(current_d) in history_df['日期'].astype(str).values:
-                history_df = history_df[history_df['日期'].astype(str) != str(current_d)]
-            updated_df = pd.concat([history_df, df_to_save], ignore_index=True)
-            updated_df.to_csv(history_file, index=False, encoding='utf-8-sig')
-            st.success(f"✅ {current_d} 數據已成功更新至資料庫！")
-
     st.markdown("---")
-    st.markdown("### 📈 歷史籌碼與股價趨勢分析")
-    if os.path.exists(history_file):
-        df_hist = pd.read_csv(history_file)
-        df_hist['日期'] = df_hist['日期'].astype(str)
-        df_hist = df_hist.sort_values('日期')
-        avail_stocks = df_hist['名稱'].unique().tolist()
-        if avail_stocks:
-            sel_stock = st.selectbox("請選擇要分析的股票：", avail_stocks)
-            df_st_hist = df_hist[df_hist['名稱'] == sel_stock].set_index('日期')
-            c3, c4 = st.columns(2)
-            with c3:
-                st.markdown(f"**{sel_stock} - 收盤價**")
-                st.line_chart(df_st_hist['收盤價'])
-            with c4:
-                st.markdown(f"**{sel_stock} - 三大法人與散戶(融資)**")
-                chart_cols = ['三大法人合計(張)']
-                if '融資餘額(張)' in df_st_hist.columns: chart_cols.append('融資餘額(張)')
 
-                st.bar_chart(df_st_hist[chart_cols])
+    # --- 第二區：資料庫管理抽屜 (點擊展開) ---
+    # 💡 秘訣 2：使用 st.expander 製作收納盒
+    with st.expander("💾 資料庫管理與下載 (點擊展開)"):
+        st.markdown("在這裡您可以將今日數據下載備份，或存入歷史資料庫。")
+        col_btn1, col_btn2 = st.columns(2)
+        
+        with col_btn1:
+            csv_data = df_show.to_csv(index=False).encode('utf-8-sig')
+            st.download_button(
+                label="⬇️ 一鍵下載今日數據 (CSV/Excel)",
+                data=csv_data,
+                file_name=f"籌碼戰況_{current_d}.csv",
+                mime="text/csv"
+            )
+            
+        with col_btn2:
+            if st.button("📥 將本日數據存入歷史資料庫"):
+                df_to_save = df_show.copy()
+                if '法人動向' in df_to_save.columns: df_to_save = df_to_save.drop(columns=['法人動向', '投信動向'])
+                df_to_save.insert(0, '日期', current_d) 
+                if not os.path.exists(history_file):
+                    df_to_save.to_csv(history_file, index=False, encoding='utf-8-sig')
+                    st.success("🎉 歷史資料庫建立成功！")
+                else:
+                    history_df = pd.read_csv(history_file)
+                    if str(current_d) in history_df['日期'].astype(str).values:
+                        history_df = history_df[history_df['日期'].astype(str) != str(current_d)]
+                    updated_df = pd.concat([history_df, df_to_save], ignore_index=True)
+                    updated_df.to_csv(history_file, index=False, encoding='utf-8-sig')
+                    st.success(f"✅ {current_d} 數據已成功更新至資料庫！")
 
-
-
+    # --- 第三區：歷史趨勢分析抽屜 (點擊展開) ---
+    with st.expander("📈 歷史籌碼與股價趨勢分析 (點擊展開)"):
+        if os.path.exists(history_file):
+            df_hist = pd.read_csv(history_file)
+            df_hist['日期'] = df_hist['日期'].astype(str)
+            df_hist = df_hist.sort_values('日期')
+            avail_stocks = df_hist['名稱'].unique().tolist()
+            if avail_stocks:
+                sel_stock = st.selectbox("請選擇要分析的股票：", avail_stocks)
+                df_st_hist = df_hist[df_hist['名稱'] == sel_stock].set_index('日期')
+                c3, c4 = st.columns(2)
+                with c3:
+                    st.markdown(f"**{sel_stock} - 收盤價**")
+                    st.line_chart(df_st_hist['收盤價'])
+                with c4:
+                    st.markdown(f"**{sel_stock} - 三大法人與散戶(融資)**")
+                    chart_cols = ['三大法人合計(張)']
+                    if '融資餘額(張)' in df_st_hist.columns: chart_cols.append('融資餘額(張)')
+                    st.bar_chart(df_st_hist[chart_cols])
+        else:
+            st.info("📝 尚未建立歷史資料庫，請先將數據存檔。")
