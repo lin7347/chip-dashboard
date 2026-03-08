@@ -187,7 +187,6 @@ if st.session_state.current_data is not None:
     # ==============================
 
     if st.button("📥 將本日數據存入歷史資料庫"):
-    if st.button("📥 將本日數據存入歷史資料庫"):
         df_to_save = df_show.copy()
         # 清除圖表用的動向文字，保持資料庫純淨
         if '法人動向' in df_to_save.columns: df_to_save = df_to_save.drop(columns=['法人動向', '投信動向'])
@@ -223,3 +222,4 @@ if st.session_state.current_data is not None:
                 if '融資餘額(張)' in df_st_hist.columns: chart_cols.append('融資餘額(張)')
 
                 st.bar_chart(df_st_hist[chart_cols])
+
