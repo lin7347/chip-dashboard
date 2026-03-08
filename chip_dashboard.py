@@ -315,3 +315,19 @@ if st.session_state.current_data is not None:
                         st.info("該區間內沒有歷史數據，請確認您的 Google 試算表中是否有此區間的存檔。")
         else:
             st.info("📝 您的 Google 試算表目前是空的，只要每天按一次存檔，這裡就會自動幫您計算區間總和喔！")
+
+# --- 第五區：完整歷史資料庫瀏覽 (查看試算表全部內容) ---
+    with st.expander("🗄️ 雲端完整歷史資料庫 (點擊展開)"):
+        if not df_hist.empty:
+            st.markdown("這裡顯示您存在 Google 試算表中的所有 30 檔 (或更多) 股票的歷史紀錄。")
+            
+            # 製作一個下拉選單，讓您可以看全部，或是快速篩選某一檔
+            all_stocks_in_db = ["顯示全部"] + list(df_hist['名稱'].unique())
+            filter_stock = st.selectbox("篩選特定股票歷史紀錄：", all_stocks_in_db, key="db_filter")
+            
+            if filter_stock == "顯示全部":
+                st.dataframe(df_hist, hide_index=True, use_container_width=True)
+            else:
+                st.dataframe(df_hist[df_hist['名稱'] == filter_stock], hide_index=True, use_container_width=True)
+        else:
+            st.info("📝 您的 Google 試算表目前是空的。")
