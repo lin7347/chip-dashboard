@@ -302,10 +302,12 @@ if st.session_state.current_data is not None:
                     df_period = df_hist.loc[mask].copy()
 
                     if not df_period.empty:
-                        # 👇 這裡也把自營商加入區間加總的計算中了
                         for col in ['外資買超(張)', '投信買超(張)', '自營商買超(張)', '三大法人合計(張)']:
                             if col in df_period.columns:
                                 df_period[col] = pd.to_numeric(df_period[col], errors='coerce').fillna(0)
+                            else:
+                                # 🛡️ 新增保護機制：如果舊資料沒有這個欄位，就自動補 0
+                                df_period[col] = 0
                         
                         df_agg = df_period.groupby(['代號', '名稱'])[['外資買超(張)', '投信買超(張)', '自營商買超(張)', '三大法人合計(張)']].sum().reset_index()
                         st.dataframe(df_agg, hide_index=True, use_container_width=True)
@@ -327,3 +329,4 @@ if st.session_state.current_data is not None:
                 st.dataframe(df_hist[df_hist['名稱'] == filter_stock], hide_index=True, use_container_width=True)
         else:
             st.info("📝 您的 Google 試算表目前是空的。")
+
