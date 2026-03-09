@@ -247,7 +247,12 @@ if st.session_state.current_data is not None:
                     try:
                         ws_hist = sheet.worksheet("歷史數據")
                         if not df_hist.empty:
-                            hist_df_filtered = df_hist[df_hist['日期'] != str(current_d)]
+                            # 🛡️ 升級防護機制：精準替換！
+                            # 只刪除「今天」且「包含在這次掃描名單內」的舊紀錄，完美保留今日其他股票的心血
+                            current_scan_codes = df_to_save['代號'].astype(str).tolist()
+                            mask_keep = ~((df_hist['日期'] == str(current_d)) & (df_hist['代號'].astype(str).isin(current_scan_codes)))
+                            hist_df_filtered = df_hist[mask_keep]
+                            
                             updated_df = pd.concat([hist_df_filtered, df_to_save], ignore_index=True)
                         else:
                             updated_df = df_to_save
@@ -329,4 +334,5 @@ if st.session_state.current_data is not None:
                 st.dataframe(df_hist[df_hist['名稱'] == filter_stock], hide_index=True, use_container_width=True)
         else:
             st.info("📝 您的 Google 試算表目前是空的。")
+
 
