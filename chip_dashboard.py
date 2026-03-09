@@ -39,7 +39,7 @@ sheet = init_connection()
 def fetch_full_market_data(date_str, target_stocks):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
 
-    # --- 引擎 A：抓籌碼 ---
+    # --- 引擎 A：抓籌碼 (新增自營商) ---
     url_chips = f"https://www.twse.com.tw/fund/T86?response=json&date={date_str}&selectType=ALL"
     try:
         res_chips = requests.get(url_chips, headers=headers, verify=False, timeout=10)
@@ -47,9 +47,10 @@ def fetch_full_market_data(date_str, target_stocks):
         if data_chips.get('stat') != 'OK' or 'data' not in data_chips: return None
             
         df_chips = pd.DataFrame(data_chips['data'], columns=data_chips['fields'])
-        df_chips = df_chips[df_chips['證券代號'].isin(target_stocks)][['證券代號', '證券名稱', '外陸資買賣超股數(不含外資自營商)', '投信買賣超股數', '三大法人買賣超股數']]
-        df_chips.columns = ['代號', '名稱', '外資買超(張)', '投信買超(張)', '三大法人合計(張)']
-        for col in ['外資買超(張)', '投信買超(張)', '三大法人合計(張)']:
+        # 👇 這裡把「自營商買賣超股數」抓出來了
+        df_chips = df_chips[df_chips['證券代號'].isin(target_stocks)][['證券代號', '證券名稱', '外陸資買賣超股數(不含外資自營商)', '投信買賣超股數', '自營商買賣超股數', '三大法人買賣超股數']]
+        df_chips.columns = ['代號', '名稱', '外資買超(張)', '投信買超(張)', '自營商買超(張)', '三大法人合計(張)']
+        for col in ['外資買超(張)', '投信買超(張)', '自營商買超(張)', '三大法人合計(張)']:
             df_chips[col] = df_chips[col].astype(str).str.replace(',', '', regex=False).astype(float) / 1000
             df_chips[col] = df_chips[col].astype(int)
     except: return None
@@ -75,7 +76,6 @@ def fetch_full_market_data(date_str, target_stocks):
                     vol_int = int(int(records[target_idx][1].replace(',', '')) / 1000)
                     close_price = float(records[target_idx][6].replace(',', ''))
                     
-                    # 計算均量 (最多回溯當月前4個交易日，加上當日共5日)
                     start_idx = max(0, target_idx - 4)
                     vol_sum = 0
                     count = 0
@@ -84,7 +84,6 @@ def fetch_full_market_data(date_str, target_stocks):
                         count += 1
                     avg_vol = round(vol_sum / count) if count > 0 else 0
                     
-                    # 判斷量能狀態
                     if vol_int > avg_vol * 1.2: vol_status = "🔥 爆量"
                     elif vol_int < avg_vol * 0.8: vol_status = "💧 量縮"
                     else: vol_status = "⚪ 量平"
@@ -135,14 +134,13 @@ def fetch_full_market_data(date_str, target_stocks):
 
 # ================= 網頁介面與邏輯 =================
 st.set_page_config(page_title="專屬籌碼戰情室", layout="wide")
-st.title("🎯 專屬籌碼分析戰情室 (量能擴充版)")
+st.title("🎯 專屬籌碼分析戰情室 (完全體視角)")
 
 if 'current_data' not in st.session_state:
     st.session_state.current_data, st.session_state.current_date = None, None
 
 st.sidebar.header("⚙️ 戰略設定")
 
-# --- 讀取 Google 觀察清單 ---
 default_stocks_str = "1513, 1514, 2886, 1216, 9904"
 if sheet:
     try:
@@ -170,7 +168,6 @@ if st.sidebar.button("🔍 執行籌碼掃描"):
             st.session_state.current_data = df
             st.session_state.current_date = selected_date
 
-# --- 讀取 Google 歷史資料庫 ---
 df_hist = pd.DataFrame()
 if sheet:
     try:
@@ -181,7 +178,6 @@ if sheet:
             df_hist['日期'] = df_hist['日期'].astype(str)
     except: pass
 
-# --- 顯示資料區 ---
 if st.session_state.current_data is not None:
     df_show = st.session_state.current_data.copy()
     current_d = st.session_state.current_date
@@ -220,8 +216,8 @@ if st.session_state.current_data is not None:
     else:
         df_show['法人動向'] = df_show['投信動向'] = "📝 需存檔"
 
-    # 加入量能變化的欄位排序
-    cols = ['代號', '名稱', '收盤價', '投信動向', '法人動向', '量能變化', '總成交量(張)', '5日均量(張)', '法人買超佔比(%)', '融資餘額(張)', '外資買超(張)', '投信買超(張)', '三大法人合計(張)']
+    # 👇 這裡把自營商排進顯示欄位裡了
+    cols = ['代號', '名稱', '收盤價', '投信動向', '法人動向', '量能變化', '總成交量(張)', '5日均量(張)', '法人買超佔比(%)', '融資餘額(張)', '外資買超(張)', '投信買超(張)', '自營商買超(張)', '三大法人合計(張)']
     df_show = df_show[[c for c in cols if c in df_show.columns]]
 
     # --- 第一區：核心看板 ---
@@ -229,7 +225,8 @@ if st.session_state.current_data is not None:
     st.dataframe(df_show, hide_index=True, use_container_width=True)
     st.markdown("---")
     st.markdown("### 📊 法人買超比較")
-    chart_data = df_show.set_index('名稱')[['外資買超(張)', '投信買超(張)']]
+    # 👇 圖表也順便加入了自營商的長條圖
+    chart_data = df_show.set_index('名稱')[['外資買超(張)', '投信買超(張)', '自營商買超(張)']]
     st.bar_chart(chart_data, height=400)
     st.markdown("---")
 
@@ -289,7 +286,7 @@ if st.session_state.current_data is not None:
         else:
             st.info("📝 尚未有歷史紀錄，請先執行上方掃描並存檔。")
 
-    # --- 第四區：區間籌碼累計加總 (全新功能！) ---
+    # --- 第四區：區間籌碼累計加總 ---
     with st.expander("📅 區間籌碼累計加總 (點擊展開)"):
         if not df_hist.empty:
             st.markdown("計算所選日期區間內，觀察清單股票的三大法人累計買賣超張數。")
@@ -305,23 +302,22 @@ if st.session_state.current_data is not None:
                     df_period = df_hist.loc[mask].copy()
 
                     if not df_period.empty:
-                        for col in ['外資買超(張)', '投信買超(張)', '三大法人合計(張)']:
+                        # 👇 這裡也把自營商加入區間加總的計算中了
+                        for col in ['外資買超(張)', '投信買超(張)', '自營商買超(張)', '三大法人合計(張)']:
                             if col in df_period.columns:
                                 df_period[col] = pd.to_numeric(df_period[col], errors='coerce').fillna(0)
                         
-                        df_agg = df_period.groupby(['代號', '名稱'])[['外資買超(張)', '投信買超(張)', '三大法人合計(張)']].sum().reset_index()
+                        df_agg = df_period.groupby(['代號', '名稱'])[['外資買超(張)', '投信買超(張)', '自營商買超(張)', '三大法人合計(張)']].sum().reset_index()
                         st.dataframe(df_agg, hide_index=True, use_container_width=True)
                     else:
                         st.info("該區間內沒有歷史數據，請確認您的 Google 試算表中是否有此區間的存檔。")
         else:
             st.info("📝 您的 Google 試算表目前是空的，只要每天按一次存檔，這裡就會自動幫您計算區間總和喔！")
 
-# --- 第五區：完整歷史資料庫瀏覽 (查看試算表全部內容) ---
+    # --- 第五區：完整歷史資料庫瀏覽 ---
     with st.expander("🗄️ 雲端完整歷史資料庫 (點擊展開)"):
         if not df_hist.empty:
-            st.markdown("這裡顯示您存在 Google 試算表中的所有 30 檔 (或更多) 股票的歷史紀錄。")
-            
-            # 製作一個下拉選單，讓您可以看全部，或是快速篩選某一檔
+            st.markdown("這裡顯示您存在 Google 試算表中的所有股票的歷史紀錄。")
             all_stocks_in_db = ["顯示全部"] + list(df_hist['名稱'].unique())
             filter_stock = st.selectbox("篩選特定股票歷史紀錄：", all_stocks_in_db, key="db_filter")
             
