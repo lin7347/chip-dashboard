@@ -167,6 +167,10 @@ if st.sidebar.button("🔍 執行籌碼掃描"):
         if df is not None:
             st.session_state.current_data = df
             st.session_state.current_date = selected_date
+        else:
+            # 🚨 新增斷線警報器：如果抓不到資料，立刻跳出紅字警告！
+            st.error("❌ 呼叫台灣證交所資料失敗！")
+            st.warning("🕵️ 可能原因：\n1. 您選擇的日期是非交易日（假日或未開盤）。\n2. 證交所伺服器正在夜間維護。\n3. Streamlit 雲端伺服器的 IP 暫時被證交所封鎖了（防爬蟲機制）。")
 
 df_hist = pd.DataFrame()
 if sheet:
@@ -334,5 +338,6 @@ if st.session_state.current_data is not None:
                 st.dataframe(df_hist[df_hist['名稱'] == filter_stock], hide_index=True, use_container_width=True)
         else:
             st.info("📝 您的 Google 試算表目前是空的。")
+
 
 
