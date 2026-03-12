@@ -37,14 +37,30 @@ sheet = init_connection()
 
 # ================= 資料抓取引擎 =================
 def fetch_full_market_data(date_str, target_stocks):
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    # 1. 🛡️ 日期格式轉換器：把斜線或減號去掉，變成證交所要的 YYYYMMDD
+    clean_date = date_str.replace("-", "").replace("/", "")
+    
+    # 2. 🎭 換上最高級的「真實瀏覽器面具」
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7"
+    }
 
     # --- 引擎 A：抓籌碼 (新增自營商) ---
-    url_chips = f"https://www.twse.com.tw/fund/T86?response=json&date={date_str}&selectType=ALL"
+    url_chips = f"https://www.twse.com.tw/fund/T86?response=json&date={clean_date}&selectType=ALL"
+    
     try:
+        # 💡 在黑色視窗印出網址與狀態，這是我們的「抓蟲監視器」！
+        print(f"🕵️ 正在呼叫證交所: {url_chips}") 
+        
         res_chips = requests.get(url_chips, headers=headers, verify=False, timeout=10)
         data_chips = res_chips.json()
-        if data_chips.get('stat') != 'OK' or 'data' not in data_chips: return None
+        
+        print(f"📡 證交所回傳狀態: {data_chips.get('stat')}")
+
+        if data_chips.get('stat') != 'OK' or 'data' not in data_chips: 
+            return None
             
         df_chips = pd.DataFrame(data_chips['data'], columns=data_chips['fields'])
         # 👇 這裡把「自營商買賣超股數」抓出來了
@@ -338,6 +354,7 @@ if st.session_state.current_data is not None:
                 st.dataframe(df_hist[df_hist['名稱'] == filter_stock], hide_index=True, use_container_width=True)
         else:
             st.info("📝 您的 Google 試算表目前是空的。")
+
 
 
 
