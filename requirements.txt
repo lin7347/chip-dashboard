@@ -2,5 +2,3 @@ streamlit
 pandas
 requests
 urllib3
-gspread
-google-auth

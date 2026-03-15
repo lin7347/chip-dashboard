@@ -15,18 +15,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 def init_connection():
     try:
         scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        raw_secret = st.secrets["google_credentials"]
         
-        if isinstance(raw_secret, str):
-            try:
-                creds_dict = json.loads(raw_secret, strict=False)
-            except:
-                clean_secret = raw_secret.replace('\n', '\\n').replace('\r', '')
-                creds_dict = json.loads(clean_secret, strict=False)
-        else:
-            creds_dict = dict(raw_secret)
-
-        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        # 🚀 終極備案：直接讀取同一個資料夾底下的 key.json
+        creds = Credentials.from_service_account_file("key.json", scopes=scopes)
+        
         client = gspread.authorize(creds)
         return client.open("專屬籌碼資料庫")
     except Exception as e:
